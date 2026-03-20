@@ -1,6 +1,8 @@
 name: Sync Address Schemes
 
 on:
+  schedule:
+    - cron: '30 3 * * 4'
   push:
     branches:
       - main
@@ -92,4 +94,5 @@ jobs:
             echo "PR creation failed"
             echo "$PR_RESPONSE"
           fi
+          
           
