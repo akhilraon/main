@@ -60,15 +60,20 @@ jobs:
       - name: Create Pull Request
         if: steps.diff.outputs.changed == 'true'
         run: |
-          PR_NUMBER=$(curl -s -X POST \
+          PR_RESPONSE=$(curl -s -X POST \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/${{ github.repository }}/pulls \
-            -d "{\"title\":\"chore: sync Address_Scheme_details.yaml\",\"body\":\"Automated weekly sync of Address_Scheme_details.yaml\",\"head\":\"${{ env.SYNC_BRANCH }}\",\"base\":\"main\",\"draft\":false}" \
-            | jq -r '.number')
+            -d "{\"title\":\"chore: sync Address_Scheme_details.yaml\",\"body\":\"Automated weekly sync of Address_Scheme_details.yaml\",\"head\":\"${{ env.SYNC_BRANCH }}\",\"base\":\"main\",\"draft\":false}")
+          echo "PR Response: $PR_RESPONSE"
+          PR_NUMBER=$(echo "$PR_RESPONSE" | jq -r '.number')
           echo "PR Number: $PR_NUMBER"
-          curl -s -X POST \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers \
-            -d "{\"reviewers\":[\"akhilraon\"]}"
+          if [ "$PR_NUMBER" != "null" ]; then
+            curl -s -X POST \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers \
+              -d "{\"reviewers\":[\"akhilraon\"]}"
+          else
+            echo "PR creation failed, skipping reviewer assignment"
+          fi
