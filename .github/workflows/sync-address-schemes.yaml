@@ -60,12 +60,26 @@ jobs:
       - name: Create Pull Request
         if: steps.diff.outputs.changed == 'true'
         run: |
+          # Close existing open PR for this branch if any
+          EXISTING_PR=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls?head=akhilraon:${{ env.SYNC_BRANCH }}&state=open" \
+            | jq -r '.[0].number')
+          if [ "$EXISTING_PR" != "null" ] && [ "$EXISTING_PR" != "" ]; then
+            echo "Closing existing PR #$EXISTING_PR"
+            curl -s -X PATCH \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/repos/${{ github.repository }}/pulls/$EXISTING_PR \
+              -d "{\"state\":\"closed\"}"
+          fi
+          # Create new PR
           PR_RESPONSE=$(curl -s -X POST \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/${{ github.repository }}/pulls \
             -d "{\"title\":\"chore: sync Address_Scheme_details.yaml\",\"body\":\"Automated weekly sync of Address_Scheme_details.yaml\",\"head\":\"${{ env.SYNC_BRANCH }}\",\"base\":\"main\",\"draft\":false}")
-          echo "PR Response: $PR_RESPONSE"
           PR_NUMBER=$(echo "$PR_RESPONSE" | jq -r '.number')
           echo "PR Number: $PR_NUMBER"
           if [ "$PR_NUMBER" != "null" ]; then
@@ -75,5 +89,7 @@ jobs:
               https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers \
               -d "{\"reviewers\":[\"akhilraon\"]}"
           else
-            echo "PR creation failed, skipping reviewer assignment"
+            echo "PR creation failed"
+            echo "$PR_RESPONSE"
           fi
+          
