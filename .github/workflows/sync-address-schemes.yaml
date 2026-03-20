@@ -1,0 +1,66 @@
+name: Sync Address Schemes
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      source_url:
+        description: 'Source URL to download Address_Scheme_details.yaml'
+        required: true
+        default: 'https://raw.githubusercontent.com/swagger-api/swagger-petstore/master/src/main/resources/openapi.yaml'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  TARGET_FILE: rules-repository/src/main/resources/Address_Scheme_details.yaml
+  SOURCE_URL: 'https://raw.githubusercontent.com/swagger-api/swagger-petstore/master/src/main/resources/openapi.yaml'
+
+jobs:
+  sync:
+    name: Sync Address_Scheme_details.yaml
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download latest Address_Scheme_details.yaml
+        run: |
+          URL="${{ github.event.inputs.source_url || env.SOURCE_URL }}"
+          curl --fail --silent --show-error --max-time 30 -o "${{ env.TARGET_FILE }}" "$URL"
+          echo "Downloaded from: $URL"
+
+      - name: Check for changes
+        id: diff
+        run: |
+          git diff --quiet "${{ env.TARGET_FILE }}" \
+            && echo "changed=false" >> $GITHUB_OUTPUT \
+            || echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: No changes detected
+        if: steps.diff.outputs.changed == 'false'
+        run: echo "Address_Scheme_details.yaml is already up to date. No PR created."
+
+      - name: Create branch and commit
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          BRANCH="chore/sync-address-schemes-$(date +%Y%m%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add "${{ env.TARGET_FILE }}"
+          git commit -m "chore: sync Address_Scheme_details.yaml"
+          git push origin "$BRANCH" || echo "Branch already exists, skipping"
+          echo "SYNC_BRANCH=$BRANCH" >> $GITHUB_ENV
+
+      - name: Create Draft Pull Request
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/pulls \
+            -d "{\"title\":\"chore: sync Address_Scheme_details.yaml\",\"body\":\"Automated weekly sync of Address_Scheme_details.yaml\",\"head\":\"${{ env.SYNC_BRANCH }}\",\"base\":\"main\",\"draft\":true}"
