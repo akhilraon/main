@@ -11,7 +11,7 @@ on:
       source_url:
         description: 'Source URL to download Address_Scheme_details.yaml'
         required: true
-        default: 'https://github.com/akhilraon/Accession/blob/master/package.json'
+        default: 'https://api.github.com/repos/akhilraon/Accession/contents/package.json?ref=master'
 
 permissions:
   contents: write
@@ -19,7 +19,7 @@ permissions:
 
 env:
   TARGET_FILE: rules-repository/src/main/resources/Address_Scheme_details.yaml
-  SOURCE_URL: 'https://github.com/akhilraon/Accession/blob/master/package.json'
+  SOURCE_URL: 'https://api.github.com/repos/akhilraon/Accession/contents/package.json?ref=master'
 
 jobs:
   sync:
@@ -33,7 +33,10 @@ jobs:
       - name: Download latest Address_Scheme_details.yaml
         run: |
           URL="${{ github.event.inputs.source_url || env.SOURCE_URL }}"
-          curl --fail --silent --show-error --max-time 30 -o "${{ env.TARGET_FILE }}" "$URL"
+          curl --fail --silent --show-error --max-time 30 \
+            -H "Authorization: Bearer ${{ secrets.PAT_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3.raw" \
+            -o "${{ env.TARGET_FILE }}" "$URL"
           echo "Downloaded from: $URL"
 
       - name: Check for changes
