@@ -20,7 +20,6 @@ permissions:
 env:
   TARGET_FILE: rules-repository/src/main/resources/Address_Scheme_details.yaml
   SOURCE_URL: 'https://api.github.com/repos/akhilraon/Accession/contents/package.json?ref=master'
-  REPO_OWNER: 'akhilraon'
   PR_REVIEWER: 'akhilraon'
 
 jobs:
@@ -29,23 +28,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          repositories: "accession,main"
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
       - name: Download latest Address_Scheme_details.yaml
         run: |
           URL="${{ github.event.inputs.source_url || env.SOURCE_URL }}"
           curl --fail --silent --show-error --max-time 30 \
-            -H "Authorization: Bearer ${{ secrets.PAT_TOKEN }}" \
+            -H "Authorization: Bearer ${{ steps.app-token.outputs.token }}" \
             -H "Accept: application/vnd.github.v3.raw" \
-            -o "${{ env.TARGET_FILE }}" "$URL"
+            -o "/tmp/source_file" "$URL"
           echo "Downloaded from: $URL"
 
       - name: Check for changes
         id: diff
         run: |
-          git diff --quiet "${{ env.TARGET_FILE }}" \
-            && echo "changed=false" >> $GITHUB_OUTPUT \
-            || echo "changed=true" >> $GITHUB_OUTPUT
+          if cmp -s "/tmp/source_file" "${{ env.TARGET_FILE }}"; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No changes detected between source and target file."
+          else
+            cp /tmp/source_file "${{ env.TARGET_FILE }}"
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Changes detected, PR will be created."
+          fi
 
       - name: No changes detected
         if: steps.diff.outputs.changed == 'false'
@@ -68,21 +83,21 @@ jobs:
         run: |
           # Close ALL existing open PRs for the sync branch
           EXISTING_PRS=$(curl -s \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer ${{ steps.app-token.outputs.token }}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls?head=${{ env.REPO_OWNER }}:${{ env.SYNC_BRANCH }}&state=open" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:${{ env.SYNC_BRANCH }}&state=open" \
             | jq -r '.[].number')
           for PR in $EXISTING_PRS; do
             echo "Closing existing PR #$PR"
             curl -s -X PATCH \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Authorization: Bearer ${{ steps.app-token.outputs.token }}" \
               -H "Accept: application/vnd.github+json" \
               https://api.github.com/repos/${{ github.repository }}/pulls/$PR \
               -d "{\"state\":\"closed\"}"
           done
           # Create new PR
           PR_RESPONSE=$(curl -s -X POST \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer ${{ steps.app-token.outputs.token }}" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/${{ github.repository }}/pulls \
             -d "{\"title\":\"chore: sync Address_Scheme_details.yaml\",\"body\":\"Automated weekly sync of Address_Scheme_details.yaml\",\"head\":\"${{ env.SYNC_BRANCH }}\",\"base\":\"main\",\"draft\":false}")
@@ -90,7 +105,7 @@ jobs:
           echo "PR Number: $PR_NUMBER"
           if [ "$PR_NUMBER" != "null" ]; then
             curl -s -X POST \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Authorization: Bearer ${{ steps.app-token.outputs.token }}" \
               -H "Accept: application/vnd.github+json" \
               https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers \
               -d "{\"reviewers\":[\"${{ env.PR_REVIEWER }}\"]}"
