@@ -20,6 +20,8 @@ permissions:
 env:
   TARGET_FILE: rules-repository/src/main/resources/Address_Scheme_details.yaml
   SOURCE_URL: 'https://api.github.com/repos/akhilraon/Accession/contents/package.json?ref=master'
+  REPO_OWNER: 'akhilraon'
+  PR_REVIEWER: 'akhilraon'
 
 jobs:
   sync:
@@ -69,7 +71,7 @@ jobs:
           EXISTING_PRS=$(curl -s \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls?head=akhilraon:${{ env.SYNC_BRANCH }}&state=open" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls?head=${{ env.REPO_OWNER }}:${{ env.SYNC_BRANCH }}&state=open" \
             | jq -r '.[].number')
           for PR in $EXISTING_PRS; do
             echo "Closing existing PR #$PR"
@@ -92,7 +94,7 @@ jobs:
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github+json" \
               https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers \
-              -d "{\"reviewers\":[\"akhilraon\"]}"
+              -d "{\"reviewers\":[\"${{ env.PR_REVIEWER }}\"]}"
           else
             echo "PR creation failed"
             echo "$PR_RESPONSE"
