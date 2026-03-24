@@ -3,6 +3,9 @@ name: Sync Address Schemes
 on:
   schedule:
     - cron: '30 3 * * 4'
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       source_url:
