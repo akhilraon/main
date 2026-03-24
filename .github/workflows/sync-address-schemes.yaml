@@ -3,9 +3,6 @@ name: Sync Address Schemes
 on:
   schedule:
     - cron: '30 3 * * 4'
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       source_url:
@@ -50,32 +47,32 @@ jobs:
       - name: Create branch and commit
         if: steps.diff.outputs.changed == 'true'
         run: |
-          BRANCH="chore/sync-address-schemes-$(date +%Y%m%d)"
+          BRANCH="chore/sync-address-schemes"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
+          git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
           git add "${{ env.TARGET_FILE }}"
           git commit -m "chore: sync Address_Scheme_details.yaml"
-          git push origin "$BRANCH" || echo "Branch already exists, skipping"
+          git push origin "$BRANCH" --force
           echo "SYNC_BRANCH=$BRANCH" >> $GITHUB_ENV
 
       - name: Create Pull Request
         if: steps.diff.outputs.changed == 'true'
         run: |
-          # Close existing open PR for this branch if any
-          EXISTING_PR=$(curl -s \
+          # Close ALL existing open PRs for the sync branch
+          EXISTING_PRS=$(curl -s \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/pulls?head=akhilraon:${{ env.SYNC_BRANCH }}&state=open" \
-            | jq -r '.[0].number')
-          if [ "$EXISTING_PR" != "null" ] && [ "$EXISTING_PR" != "" ]; then
-            echo "Closing existing PR #$EXISTING_PR"
+            | jq -r '.[].number')
+          for PR in $EXISTING_PRS; do
+            echo "Closing existing PR #$PR"
             curl -s -X PATCH \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github+json" \
-              https://api.github.com/repos/${{ github.repository }}/pulls/$EXISTING_PR \
+              https://api.github.com/repos/${{ github.repository }}/pulls/$PR \
               -d "{\"state\":\"closed\"}"
-          fi
+          done
           # Create new PR
           PR_RESPONSE=$(curl -s -X POST \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
@@ -94,5 +91,3 @@ jobs:
             echo "PR creation failed"
             echo "$PR_RESPONSE"
           fi
-          
-          
