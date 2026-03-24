@@ -31,7 +31,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Download latest Address_Scheme_details.yaml
         run: |
           URL="${{ github.event.inputs.source_url || env.SOURCE_URL }}"
