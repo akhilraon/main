@@ -53,7 +53,7 @@ jobs:
       - name: Check for changes
         id: diff
         run: |
-          if cmp -s "/tmp/source_file" "${{ env.TARGET_FILE }}"; then
+          if [ -f "${{ env.TARGET_FILE }}" ] && cmp -s "/tmp/source_file" "${{ env.TARGET_FILE }}"; then
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "No changes detected between source and target file."
           else
